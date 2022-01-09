@@ -1,0 +1,38 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["mongoDb"]
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model Character {
+  id          String  @id @default(dbgenerated()) @map("_id") @db.ObjectId
+  name        String  @unique
+  born        String?
+  abilities   String?
+  bonded      String?
+  titles      String?
+  aliases     String?
+  profession  String?
+  groups      String?
+  birthPlace  String?
+  residence   String?
+  nationality String?
+  imageId     String? @db.ObjectId
+  image       Image?  @relation(fields: [imageId], references: [id])
+}
+
+model Image {
+  id        String      @id @default(dbgenerated()) @map("_id") @db.ObjectId
+  src       String      @unique
+  srcSet    String[]    @unique
+  width     Int?
+  height    Int?
+  Character Character[]
+}
