@@ -4,16 +4,16 @@ import cheerio from "cheerio";
 import { logger } from "./logger";
 
 const db = new PrismaClient();
+const url = "https://coppermind.net";
 
 interface CharacterLink {
   name: string;
   link: string;
 }
 
-export async function getCharacterLinks(): Promise<CharacterLink[] | void> {
+async function getCharacterLinks(): Promise<CharacterLink[] | void> {
   try {
     logger.info("Getting character links");
-    const url = "https://coppermind.net";
     const { data } = await axios(`${url}/wiki/Category:Rosharans`);
     const $ = cheerio.load(data);
 
@@ -51,12 +51,48 @@ export async function getCharacterLinks(): Promise<CharacterLink[] | void> {
   }
 }
 
+async function processImage(
+  $: cheerio.Root,
+  tableRowData: cheerio.Cheerio
+): Promise<number | null> {
+  logger.info("Processing image");
+  const image = $(tableRowData).find("a>img");
+
+  if (!image) return null;
+
+  const createdImage = await db.image.create({
+    data: {
+      src: `${url}${image.attr("src")}` || "",
+      width: Number(image.attr("width")) || null,
+      height: Number(image.attr("height")) || null,
+    },
+  });
+
+  const srcSet =
+    image
+      .attr("srcset")
+      ?.split(",")
+      .map((_img) => {
+        return {
+          url: `${url}${_img.trim().split(" ")[0].trim()}`,
+          imageId: createdImage.id,
+        };
+      }) || [];
+
+  srcSet.push({ url: createdImage.src, imageId: createdImage.id });
+
+  await db.src.createMany({
+    data: srcSet,
+  });
+
+  return createdImage.id;
+}
+
 export async function seedDb(): Promise<void> {
   db.$connect();
   logger.info("Seeding database");
 
   try {
-    const url = "https://coppermind.net";
     const characterLinks = await getCharacterLinks();
 
     if (!characterLinks || characterLinks.length === 0) {
@@ -72,7 +108,7 @@ export async function seedDb(): Promise<void> {
       const { data: character } = await axios(characterLink.link);
       const $ = cheerio.load(character);
 
-      const characterData = {
+      const characterData: Partial<Character> = {
         name: characterLink.name,
       };
 
@@ -80,75 +116,49 @@ export async function seedDb(): Promise<void> {
 
       for (let tableRow of tableRows) {
         const tableRowData = $(tableRow).find("td");
-        const tableRowKey = $(tableRow).find("th");
+        const tableRowDataText = $(tableRow).find("td").text().trim();
+        const tableRowKeyText = $(tableRow).find("th").text().trim();
+        const tableRowKeyLength = $(tableRow).find("th").length;
 
-        if (tableRowKey.text().trim() === "Abilities") {
-          (characterData as Character).abilities = $(tableRowData)
-            .text()
-            .trim();
+        if (tableRowKeyText === "Abilities") {
+          characterData.abilities = tableRowDataText;
         }
-        if (tableRowKey.text().trim() === "Born") {
-          (characterData as Character).born = $(tableRowData).text().trim();
+        if (tableRowKeyText === "Born") {
+          characterData.born = tableRowDataText;
         }
-        if (tableRowKey.text().trim() === "Bonded With") {
-          (characterData as Character).bonded = $(tableRowData).text().trim();
+        if (tableRowKeyText === "Bonded With") {
+          characterData.bonded = tableRowDataText;
         }
-        if (tableRowKey.text().trim() === "Titles") {
-          (characterData as Character).titles = $(tableRowData).text().trim();
+        if (tableRowKeyText === "Titles") {
+          characterData.titles = tableRowDataText;
         }
-        if (tableRowKey.text().trim() === "Aliases") {
-          (characterData as Character).aliases = $(tableRowData).text().trim();
+        if (tableRowKeyText === "Aliases") {
+          characterData.aliases = tableRowDataText;
         }
-        if (tableRowKey.text().trim() === "Profession") {
-          (characterData as Character).profession = $(tableRowData)
-            .text()
-            .trim();
+        if (tableRowKeyText === "Profession") {
+          characterData.profession = tableRowDataText;
         }
-        if (tableRowKey.text().trim() === "Groups") {
-          (characterData as Character).groups = $(tableRowData).text().trim();
+        if (tableRowKeyText === "Groups") {
+          characterData.groups = tableRowDataText;
         }
-        if (tableRowKey.text().trim() === "Birthplace") {
-          (characterData as Character).birthPlace = $(tableRowData)
-            .text()
-            .trim();
+        if (tableRowKeyText === "Birthplace") {
+          characterData.birthPlace = tableRowDataText;
         }
-        if (tableRowKey.text().trim() === "Residence") {
-          (characterData as Character).residence = $(tableRowData)
-            .text()
-            .trim();
+        if (tableRowKeyText === "Residence") {
+          characterData.residence = tableRowDataText;
         }
-        if (tableRowKey.text().trim() === "Nationality") {
-          (characterData as Character).nationality = $(tableRowData)
-            .text()
-            .trim();
+        if (tableRowKeyText === "Nationality") {
+          characterData.nationality = tableRowDataText;
         }
-        if (tableRowKey.length === 0) {
-          const image = $(tableRowData).find("a>img");
-          if (image) {
-            const createdImage = await db.image.create({
-              data: {
-                src: `${url}${image.attr("src")}` || "",
-                srcSet:
-                  image
-                    .attr("srcset")
-                    ?.split(",")
-                    .map((_img) => {
-                      return `${url}${_img.trim().split(" ")[0].trim()}`;
-                    }) || [],
-                width: Number(image.attr("width")) || null,
-                height: Number(image.attr("height")) || null,
-              },
-            });
-
-            (characterData as Character).imageId = createdImage.id;
-          }
+        if (tableRowKeyLength === 0) {
+          characterData.imageId = await processImage($, tableRowData);
         }
       }
 
       characters.push(characterData);
 
       const createdCharacter = await db.character.create({
-        data: characterData,
+        data: characterData as Character,
       });
       logger.info(`Created character: ${createdCharacter.name}`);
     }

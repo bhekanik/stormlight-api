@@ -7,7 +7,7 @@
     "dev": "nodemon src/index.ts | bunyan",
     "prestart": "tsc",
     "start": "node dist/index.js",
-    "seed:db": "nodemon src/seedDb.ts | bunyan"
+    "seed:db": "ts-node src/seedDb.ts | bunyan"
   },
   "keywords": [],
   "author": "",

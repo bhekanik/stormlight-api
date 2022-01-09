@@ -3,16 +3,19 @@
 
 generator client {
   provider        = "prisma-client-js"
-  previewFeatures = ["mongoDb"]
+  previewFeatures = ["referentialIntegrity"]
 }
 
 datasource db {
-  provider = "mongodb"
-  url      = env("DATABASE_URL")
+  provider             = "mysql"
+  url                  = env("DATABASE_URL")
+  shadowDatabaseUrl    = env("SHADOW_DATABASE_URL")
+  referentialIntegrity = "prisma"
 }
 
 model Character {
-  id          String  @id @default(dbgenerated()) @map("_id") @db.ObjectId
+  // id          String  @id @default(dbgenerated()) @map("_id") @db.ObjectId
+  id          Int     @id @default(autoincrement())
   name        String  @unique
   born        String?
   abilities   String?
@@ -24,15 +27,23 @@ model Character {
   birthPlace  String?
   residence   String?
   nationality String?
-  imageId     String? @db.ObjectId
+  imageId     Int?
   image       Image?  @relation(fields: [imageId], references: [id])
 }
 
+model Src {
+  id      Int    @id @default(autoincrement())
+  url     String
+  Image   Image? @relation(fields: [imageId], references: [id])
+  imageId Int?
+}
+
 model Image {
-  id        String      @id @default(dbgenerated()) @map("_id") @db.ObjectId
-  src       String      @unique
-  srcSet    String[]    @unique
+  // id        String      @id @default(dbgenerated()) @map("_id") @db.ObjectId
+  id        Int         @id @default(autoincrement())
+  src       String
   width     Int?
   height    Int?
   Character Character[]
+  srcSet    Src[]
 }
