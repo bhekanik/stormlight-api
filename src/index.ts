@@ -22,7 +22,7 @@ app.get("/characters", async (req: Request, res: Response) => {
     db.$connect();
     logger.info({ req }, "Getting characters");
 
-    const { skip, take, orderBy, sort, cursor } = req.query;
+    const { skip, take, orderBy, sort, cursor, where } = req.query;
 
     const queryOptions: Prisma.CharacterFindManyArgs = {
       orderBy: {
@@ -31,6 +31,12 @@ app.get("/characters", async (req: Request, res: Response) => {
     };
 
     if (skip) queryOptions.skip = Number(skip);
+    if (where)
+      queryOptions.where = {
+        [(where as string).split(":")[0].replace('"', "")]: (where as string)
+          .split(":")[1]
+          .replace('"', ""),
+      };
     if (take) queryOptions.take = Number(take) < 100 ? Number(take) : 100;
     if (orderBy && sort && !cursor)
       queryOptions.orderBy = { [orderBy as string]: sort };
@@ -65,7 +71,16 @@ app.get("/characters", async (req: Request, res: Response) => {
       }
     });
 
-    const total = await db.character.count();
+    const countOptions: Prisma.CharacterCountArgs = {};
+
+    if (where)
+      countOptions.where = {
+        [(where as string).split(":")[0].replace('"', "")]: (where as string)
+          .split(":")[1]
+          .replace('"', ""),
+      };
+
+    const total = await db.character.count(countOptions);
 
     const responseData: GetCharactersResponse = {
       charactersSlice: formattedCharacters,
